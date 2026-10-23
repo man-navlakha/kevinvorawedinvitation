@@ -1,7 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { WeddingData } from "@/types/wedding";
-import { EnvelopeIntro } from "@/components/invitation/EnvelopeIntro";
 import { HeroSection } from "@/components/invitation/HeroSection";
 import { DateRevealSection } from "@/components/invitation/DateRevealSection";
 import { StorySection } from "@/components/invitation/StorySection";
@@ -27,7 +26,28 @@ export function PublicInvitationView({
 }: PublicInvitationViewProps) {
   const [data, setData] = useState<WeddingData>(initialData);
   const [isOpened, setIsOpened] = useState(isEmbedPreview);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const entryVideoRef = useRef<HTMLVideoElement>(null);
   const localVersionRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (isOpened) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    window.scrollTo({ top: 0, behavior: "instant" });
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isOpened]);
 
   // 1. Sync immediately whenever initialData prop updates (e.g. Split Live Preview inside Admin)
   useEffect(() => {
@@ -191,6 +211,19 @@ export function PublicInvitationView({
     "--wedding-heading-weight": textStyling?.isBoldHeading ? "700" : "normal",
   } as React.CSSProperties;
 
+  const startEntryVideo = async () => {
+    const video = entryVideoRef.current;
+    if (!video || isVideoPlaying) return;
+
+    try {
+      await video.play();
+      setIsVideoPlaying(true);
+      setVideoError(null);
+    } catch {
+      setVideoError("The entry video couldn't be played. Please try clicking again.");
+    }
+  };
+
   return (
     <main
       style={dynamicStyles}
@@ -199,12 +232,36 @@ export function PublicInvitationView({
       {/* Background Flower Petals Showering Animation */}
       <PetalShower density={38} />
 
-      {/* 1. Full Screen Luxury Invitation Envelope Intro */}
+      {/* Entry video plays on demand before the invitation is revealed. */}
       {!isOpened && (
-        <EnvelopeIntro
-          wedding={data.wedding}
-          onOpen={() => setIsOpened(true)}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black">
+          <video
+            ref={entryVideoRef}
+            src="/media/Best%20Entry%20Video-kevin.mp4"
+            className="h-full w-full object-cover"
+            preload="metadata"
+            playsInline
+            aria-hidden="true"
+            onEnded={() => {
+              window.scrollTo({ top: 0, behavior: "instant" });
+              setIsOpened(true);
+            }}
+            onError={() => setVideoError("The entry video couldn't be loaded. Please refresh and try again.")}
+          />
+          {!isVideoPlaying && (
+            <button
+              type="button"
+              onClick={() => void startEntryVideo()}
+              className="absolute inset-0 cursor-pointer"
+              aria-label="Play entry video"
+            />
+          )}
+          {videoError && (
+            <p role="alert" className="absolute bottom-6 left-4 right-4 text-center text-sm text-white">
+              {videoError}
+            </p>
+          )}
+        </div>
       )}
 
       {/* 3. Floating Music Controller - Starts by default upon opening, stays mounted for smooth audio */}
